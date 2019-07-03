@@ -343,14 +343,12 @@ void ui_line(ScreenGrid *grid, int row, int startcol, int endcol, int clearcol,
                    (const sattr_T *)grid->attrs + off);
 
   if (p_wd && !grid->throttled) {  // 'writedelay': flush & delay each time.
-    int old_row = cursor_row, old_col = cursor_col;
-    handle_T old_grid = cursor_grid_handle;
     // If 'writedelay' is active, set the cursor to indicate what was drawn.
     ui_call_grid_cursor_goto(grid->handle, row, MIN(clearcol, (int)Columns-1));
     ui_call_flush();
     uint64_t wd = (uint64_t)labs(p_wd);
     os_microdelay(wd * 1000u, true);
-    pending_cursor_update = true;
+    pending_cursor_update = true;  // restore the cursor later
   }
 }
 
