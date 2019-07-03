@@ -341,15 +341,15 @@ void ui_line(ScreenGrid *grid, int row, int startcol, int endcol, int clearcol,
                    flags, (const schar_T *)grid->chars + off,
                    (const sattr_T *)grid->attrs + off);
 
-  if (p_wd) {  // 'writedelay': flush & delay each time.
+  if (p_wd && !grid->comp_disabled) {  // 'writedelay': flush & delay each time.
     int old_row = cursor_row, old_col = cursor_col;
     handle_T old_grid = cursor_grid_handle;
     // If 'writedelay' is active, set the cursor to indicate what was drawn.
-    ui_grid_cursor_goto(grid->handle, row, MIN(clearcol, (int)Columns-1));
-    ui_flush();
+    ui_call_grid_cursor_goto(grid->handle, row, MIN(clearcol, (int)Columns-1));
+    ui_call_flush();
     uint64_t wd = (uint64_t)labs(p_wd);
     os_microdelay(wd * 1000u, true);
-    ui_grid_cursor_goto(old_grid, old_row, old_col);
+    pending_cursor_update = true;
   }
 }
 
@@ -392,6 +392,7 @@ void ui_flush(void)
   cmdline_ui_flush();
   win_ui_flush_positions();
   msg_ext_ui_flush();
+  msg_scroll_flush();
 
   if (pending_cursor_update) {
     ui_call_grid_cursor_goto(cursor_grid_handle, cursor_row, cursor_col);
