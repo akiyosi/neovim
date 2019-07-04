@@ -19,6 +19,7 @@
 #include "nvim/ui.h"
 #include "nvim/highlight.h"
 #include "nvim/memory.h"
+#include "nvim/message.h"
 #include "nvim/popupmnu.h"
 #include "nvim/ui_compositor.h"
 #include "nvim/ugrid.h"
@@ -46,8 +47,7 @@ static int chk_width = 0, chk_height = 0;
 static ScreenGrid *curgrid;
 
 static bool valid_screen = true;
-static bool msg_scroll_mode = false;
-static int msg_first_invalid = 0;
+static int msg_first_invalid = INT_MAX;
 
 void ui_comp_init(void)
 {
@@ -61,8 +61,7 @@ void ui_comp_init(void)
   compositor->grid_scroll = ui_comp_grid_scroll;
   compositor->grid_cursor_goto = ui_comp_grid_cursor_goto;
   compositor->raw_line = ui_comp_raw_line;
-  compositor->win_scroll_over_start = ui_comp_win_scroll_over_start;
-  compositor->win_scroll_over_reset = ui_comp_win_scroll_over_reset;
+  compositor->msg_set_pos = ui_comp_msg_set_pos;
 
   // Be unopinionated: will be attached together with a "real" ui anyway
   compositor->width = INT_MAX;
@@ -150,7 +149,10 @@ bool ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width,
 #endif
 
     size_t insert_at = kv_size(layers);
-    if (kv_A(layers, insert_at-1) == &pum_grid) {
+    if (kv_A(layers, insert_at-1) == &msg_grid) {
+      insert_at--;
+    }
+    if (kv_A(layers, insert_at-1) == &pum_grid && grid != &msg_grid) {
       insert_at--;
     }
     if (insert_at > 1 && !on_top) {
@@ -308,7 +310,7 @@ static void compose_line(Integer row, Integer startcol, Integer endcol,
     for (size_t i = 0; i < kv_size(layers); i++) {
       ScreenGrid *g = kv_A(layers, i);
       if (g->comp_row > row || row >= g->comp_row + g->Rows
-          || g->comp_disabled) {
+          || g->comp_disabled || g->comp_firstrow > row) {
         continue;
       }
       if (g->comp_col <= col && col < g->comp_col+g->Columns) {
@@ -417,6 +419,9 @@ static void ui_comp_raw_line(UI *ui, Integer grid, Integer row,
   }
   assert(row < default_grid.Rows);
   assert(clearcol <= default_grid.Columns);
+  // TODO: msg_grid will always cause this branch
+  // but maybe we should just fix compose_line to respect clearing and
+  // call it a day.
   if (flags & kLineFlagInvalid
       || kv_size(layers) > curgrid->comp_index+1
       || curgrid->blending) {
@@ -435,25 +440,13 @@ void ui_comp_set_screen_valid(bool valid)
   valid_screen = valid;
 }
 
-// TODO(bfredl): These events are somewhat of a hack. multiline messages
-// should later on be a separate grid, then this would just be ordinary
-// ui_comp_put_grid and ui_comp_remove_grid calls.
-static void ui_comp_win_scroll_over_start(UI *ui)
+static void ui_comp_msg_set_pos(UI *ui, Integer row)
 {
-  msg_scroll_mode = true;
-  msg_first_invalid = ui->height;
-}
-
-static void ui_comp_win_scroll_over_reset(UI *ui)
-{
-  msg_scroll_mode = false;
-  for (size_t i = 1; i < kv_size(layers); i++) {
-    ScreenGrid *grid = kv_A(layers, i);
-    if (grid->comp_row+grid->Rows > msg_first_invalid) {
-      compose_area(msg_first_invalid, grid->comp_row+grid->Rows,
-                   grid->comp_col, grid->comp_col+grid->Columns);
-    }
+  msg_grid.comp_firstrow = (int)row;
+  if (row > msg_first_invalid && ui_comp_should_draw()) {
+    compose_area(msg_first_invalid, row, 0, default_grid.Columns);
   }
+  msg_first_invalid = (int)row;
 }
 
 static void ui_comp_grid_scroll(UI *ui, Integer grid, Integer top,
@@ -468,7 +461,7 @@ static void ui_comp_grid_scroll(UI *ui, Integer grid, Integer top,
   left += curgrid->comp_col;
   right += curgrid->comp_col;
   bool covered = kv_size(layers) > curgrid->comp_index+1 || curgrid->blending;
-  if (!msg_scroll_mode && covered) {
+  if (covered) {
     // TODO(bfredl):
     // 1. check if rectangles actually overlap
     // 2. calulate subareas that can scroll.
@@ -479,7 +472,6 @@ static void ui_comp_grid_scroll(UI *ui, Integer grid, Integer top,
     }
     compose_area(top, bot, left, right);
   } else {
-    msg_first_invalid = MIN(msg_first_invalid, (int)top);
     ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
   }
 }

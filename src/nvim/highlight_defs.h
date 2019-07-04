@@ -92,6 +92,7 @@ typedef enum {
   , HLF_INACTIVE    // NormalNC: Normal text in non-current windows
   , HLF_MSGSEP      // message separator line
   , HLF_NFLOAT      // Floating window
+  , HLF_MSG         // Message area
   , HLF_COUNT       // MUST be the last one
 } hlf_T;
 
@@ -145,6 +146,7 @@ EXTERN const char *hlf_names[] INIT(= {
   [HLF_INACTIVE] = "NormalNC",
   [HLF_MSGSEP] = "MsgSeparator",
   [HLF_NFLOAT] = "NormalFloat",
+  [HLF_MSG] = "Message",
 });
 
 
