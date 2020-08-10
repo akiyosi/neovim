@@ -2160,6 +2160,42 @@ static void f_expandcmd(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   rettv->vval.v_string = cmdstr;
 }
 
+
+/// "flatten(list[, {maxdepth}])" function
+static void f_flatten(typval_T *argvars, typval_T *rettv, FunPtr fptr)
+{
+  list_T *list;
+  long maxdepth;
+  bool error = false;
+
+  if (argvars[0].v_type != VAR_LIST) {
+    EMSG2(_(e_listarg), "flatten()");
+    return;
+  }
+
+  if (argvars[1].v_type == VAR_UNKNOWN) {
+    maxdepth = 999999;
+  } else {
+    maxdepth = (long)tv_get_number_chk(&argvars[1], &error);
+    if (error) {
+      return;
+    }
+    if (maxdepth < 0) {
+      EMSG(_("E900: maxdepth must be non-negative number"));
+      return;
+    }
+  }
+
+  list = argvars[0].vval.v_list;
+  if (list != NULL
+      && !tv_check_lock(tv_list_locked(list),
+                        N_("flatten() argument"),
+                        TV_TRANSLATE)
+      && tv_list_flatten(list, maxdepth) == OK) {
+    tv_copy(&argvars[0], rettv);
+  }
+}
+
 /*
  * "extend(list, list [, idx])" function
  * "extend(dict, dict [, action])" function
@@ -9483,7 +9519,7 @@ static void f_split(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   tv_list_alloc_ret(rettv, kListLenMayKnow);
 
   if (typeerr) {
-    return;
+    goto theend;
   }
 
   regmatch_T regmatch = {
@@ -9527,6 +9563,7 @@ static void f_split(typval_T *argvars, typval_T *rettv, FunPtr fptr)
     vim_regfree(regmatch.regprog);
   }
 
+theend:
   p_cpo = save_cpo;
 }
 
