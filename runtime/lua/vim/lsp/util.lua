@@ -299,10 +299,9 @@ end
 ---
 --@see https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_completion
 local function sort_completion_items(items)
-  if items[1] and items[1].sortText then
-    table.sort(items, function(a, b) return a.sortText < b.sortText
-    end)
-  end
+  table.sort(items, function(a, b)
+    return (a.sortText or a.label) < (b.sortText or b.label)
+  end)
 end
 
 --@private
@@ -506,13 +505,13 @@ function M.convert_signature_help_to_markdown_lines(signature_help)
   if signature.documentation then
     M.convert_input_to_markdown_lines(signature.documentation, contents)
   end
-  if signature_help.parameters then
+  if signature.parameters and #signature.parameters > 0 then
     local active_parameter = signature_help.activeParameter or 0
     -- If the activeParameter is not inside the valid range, then clip it.
-    if active_parameter >= #signature_help.parameters then
+    if active_parameter >= #signature.parameters then
       active_parameter = 0
     end
-    local parameter = signature.parameters and signature.parameters[active_parameter]
+    local parameter = signature.parameters[active_parameter + 1]
     if parameter then
       --[=[
       --Represents a parameter of a callable-signature. A parameter can
@@ -533,8 +532,8 @@ function M.convert_signature_help_to_markdown_lines(signature_help)
       }
       --]=]
       -- TODO highlight parameter
-      if parameter.documentation then
-        M.convert_input_help_to_markdown_lines(parameter.documentation, contents)
+      if parameter.documentation and parameter.documentation ~= vim.NIL then
+        M.convert_input_to_markdown_lines(parameter.documentation, contents)
       end
     end
   end
@@ -669,7 +668,7 @@ function M.focusable_float(unique_name, fn)
   local bufnr = api.nvim_get_current_buf()
   do
     local win = find_window_by_var(unique_name, bufnr)
-    if win then
+    if win and api.nvim_win_is_valid(win) and not vim.fn.pumvisible() then
       api.nvim_set_current_win(win)
       api.nvim_command("stopinsert")
       return
@@ -1438,6 +1437,9 @@ local function make_position_param()
   local row, col = unpack(api.nvim_win_get_cursor(0))
   row = row - 1
   local line = api.nvim_buf_get_lines(0, row, row+1, true)[1]
+  if not line then
+    return { line = 0; character = 0; }
+  end
   col = str_utfindex(line, col)
   return { line = row; character = col; }
 end

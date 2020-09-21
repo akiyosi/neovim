@@ -6019,6 +6019,12 @@ char_u *grab_file_name(long count, linenr_T *file_lnum)
     char_u  *ptr;
     if (get_visual_text(NULL, &ptr, &len) == FAIL)
       return NULL;
+    // Only recognize ":123" here
+    if (file_lnum != NULL && ptr[len] == ':' && isdigit(ptr[len + 1])) {
+      char_u *p = ptr + len + 1;
+
+      *file_lnum = getdigits_long(&p, false, 0);
+    }
     return find_file_name_in_path(ptr, len, options, count, curbuf->b_ffname);
   }
   return file_name_at_cursor(options | FNAME_HYP, count, file_lnum);
@@ -6986,7 +6992,7 @@ void win_findbuf(typval_T *argvars, list_T *list)
   int bufnr = tv_get_number(&argvars[0]);
 
   FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp->w_buffer->b_fnum == bufnr) {
+    if (!wp->w_closing && wp->w_buffer->b_fnum == bufnr) {
       tv_list_append_number(list, wp->handle);
     }
   }
