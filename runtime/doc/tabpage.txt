@@ -429,14 +429,10 @@ space available.
 ==============================================================================
 5. Setting 'guitablabel'				*setting-guitablabel*
 
-When the GUI tabpages line is displayed, 'guitablabel' can be used to
-specify the label to display for each tabpage.  Unlike 'tabline', which
-specifies the whole tabpages line at once, 'guitablabel' is used for each
-label separately.
-
-'guitabtooltip' is very similar and is used for the tooltip of the same label.
-This only appears when the mouse pointer hovers over the label, thus it
-usually is longer.  Only supported on some systems though.
+When a UI draws its own tabpages line (|ui-tabline|), 'guitablabel' can be
+used to specify the label to display for each tabpage.  Unlike 'tabline',
+which specifies the whole tabpages line at once, 'guitablabel' is used for
+each label separately.
 
 See the 'statusline' option for the format of the value.
 
@@ -444,8 +440,12 @@ The "%N" item can be used for the current tabpage number.  The |v:lnum|
 variable is also set to this number when the option is evaluated.
 The items that use a file name refer to the current window of the tabpage.
 
-Note that syntax highlighting is not used for the option.  The %T and %X
-items are also ignored.
+The %T, %X and %@ items are ignored.
+
+The label may span several lines.  Insert a line break with an
+expression: >vim
+	set guitablabel=%t%{\"\\n\"}%{getcwd(-1,v:lnum)}
+<
 
 A simple example that puts the tabpage number and the buffer name in the
 label: >

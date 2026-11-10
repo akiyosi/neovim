@@ -763,11 +763,17 @@ Activated by the `ext_tabline` |ui-option|.
 
 ["tabline_update", curtab, tabs, curbuf, buffers] ~
 	Tabline was updated. UIs should present this data in a custom tabline
-	widget. Note: options `curbuf` + `buffers` were added in API7.
+	widget. Note: options `curbuf` + `buffers` were added in API7,
+	`name_chunks` in API15.
 	curtab:   Current Tabpage
-	tabs:     List of Dicts [{ "tab": Tabpage, "name": String }, ...]
+	tabs:     List of Dicts [{ "tab": Tabpage, "name": String,
+	                           "name_chunks": [[attr_id, text_chunk, hl_id], ...] }, ...]
 	curbuf:   Current buffer handle.
 	buffers:  List of Dicts [{ "buffer": buffer handle, "name": String}, ...]
+
+	`name_chunks` is the 'guitablabel' result as highlighted chunks, and
+	is absent when `name` is the default label.  A 'guitablabel' result
+	may contain "\n".
 
 ==============================================================================
 Cmdline Events							   *ui-cmdline*

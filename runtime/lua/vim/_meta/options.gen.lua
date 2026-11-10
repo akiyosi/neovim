@@ -3292,6 +3292,25 @@ vim.o.gfw = vim.o.guifontwide
 vim.go.guifontwide = vim.o.guifontwide
 vim.go.gfw = vim.go.guifontwide
 
+--- When non-empty describes the text to use in a label of the tabpages
+--- line.  When empty and when the result is empty Nvim will use a default
+--- label.  See `setting-guitablabel` for more info.
+---
+--- The format of this option is like that of 'statusline'.
+--- The expression will be evaluated in the `sandbox` when set from a
+--- modeline, see `sandbox-option`.
+--- This option cannot be set in a modeline when 'modelineexpr' is off.
+---
+--- Only used by a UI that draws its own tabpages line (`ui-tabline`),
+--- which receives the label in the `tabline_update` event.  For the
+--- tabpages line drawn by Nvim itself 'tabline' is used.
+---
+--- @type string
+vim.o.guitablabel = ""
+vim.o.gtl = vim.o.guitablabel
+vim.go.guitablabel = vim.o.guitablabel
+vim.go.gtl = vim.go.guitablabel
+
 --- Name of the main help file.  All distributed help files should be
 --- placed together in one directory.  Additionally, all "doc" directories
 --- in 'runtimepath' will be used.
@@ -6923,6 +6942,7 @@ vim.wo.stc = vim.wo.statuscolumn
 --- ( -   Start of item group.  Can be used for setting the width and
 ---       alignment of a section.  Must be followed by %) somewhere.
 --- ) -   End of item group.  No width fields allowed.
+--- N N   For 'guitablabel': number of the tabpage.
 --- T N   For 'tabline': start of tabpage N label.  Use %T or %X to end
 ---       the label.  Clicking this label with left mouse button switches
 ---       to the specified tabpage, while clicking it with middle mouse

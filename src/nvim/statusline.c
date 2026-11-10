@@ -228,6 +228,39 @@ void stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_r
 }
 
 static bool did_show_ext_ruler = false;
+
+/// Resolves the highlight in effect after highlight record "sp" of a statusline
+/// built by build_stl_str_hl().  "attr" and "group" are the base highlight of
+/// the line; "*curattr" and "*curgroup" are updated in place.
+///
+/// @param wp  window the line belongs to, NULL for 'tabline' and 'guitablabel'
+static void stl_hlrec_attr(const stl_hlrec_t *sp, win_T *wp, int attr, int group, int *curattr,
+                           int *curgroup)
+{
+  if (sp->userhl == 0) {
+    *curattr = attr;
+    *curgroup = group;
+  } else if (sp->userhl < 0) {
+    int new_attr = syn_id2attr(-sp->userhl);
+    if (sp->item == STL_HIGHLIGHT_COMB) {
+      *curattr = hl_combine_attr(*curattr, new_attr);
+    } else {
+      *curattr = new_attr;
+    }
+    *curgroup = -sp->userhl;
+  } else {
+    int *userhl = (wp != NULL && wp != curwin && wp->w_status_height != 0)
+                  ? highlight_stlnc : highlight_user;
+    char userbuf[5] = "User";
+    userbuf[4] = (char)sp->userhl + '0';
+    *curattr = userhl[sp->userhl - 1];
+    *curgroup = syn_name2id_len(userbuf, 5);
+  }
+  if (*curattr != attr) {
+    *curattr = hl_combine_attr(attr, *curattr);
+  }
+}
+
 /// Redraws the statusline, winbar, ruler or tabline.
 ///
 /// @param wp  target window, NULL for 'tabline'
@@ -415,28 +448,8 @@ static void win_redr_stl_expr(win_T *wp, bool draw_winbar, bool draw_ruler, bool
 
     if (p == NULL) {
       break;
-    } else if (sp->userhl == 0) {
-      curattr = attr;
-      curgroup = (int)group;
-    } else if (sp->userhl < 0) {
-      int new_attr = syn_id2attr(-sp->userhl);
-      if (sp->item == STL_HIGHLIGHT_COMB) {
-        curattr = hl_combine_attr(curattr, new_attr);
-      } else {
-        curattr = new_attr;
-      }
-      curgroup = -sp->userhl;
-    } else {
-      int *userhl = (wp != NULL && wp != curwin && wp->w_status_height != 0)
-                    ? highlight_stlnc : highlight_user;
-      char userbuf[5] = "User";
-      userbuf[4] = (char)sp->userhl + '0';
-      curattr = userhl[sp->userhl - 1];
-      curgroup = syn_name2id_len(userbuf, 5);
     }
-    if (curattr != attr) {
-      curattr = hl_combine_attr(attr, curattr);
-    }
+    stl_hlrec_attr(sp, wp, attr, (int)group, &curattr, &curgroup);
   }
 
   if (p_sc && find_option(p_sloc) == opt_idx) {
@@ -533,6 +546,98 @@ schar_T fillchar_status(hlf_T *group, win_T *wp)
   }
 }
 
+/// Evaluates 'guitablabel' for the "tabnr"-th tabpage "tp" into "buf".
+///
+/// "tp" is made the current tabpage during the evaluation, without
+/// autocommands, so that %{} expressions and file-name items see the current
+/// window of that tabpage.
+///
+/// @param[out] hltab  highlight records of the result
+static void eval_tabpage_label(tabpage_T *tp, int tabnr, CharBuf buf, stl_hlrec_t **hltab)
+{
+  tabpage_T *save_curtab = curtab;
+  if (tp != curtab) {
+    unuse_tabpage(curtab);
+    use_tabpage(tp);
+    curbuf = curwin->w_buffer;
+  }
+
+  // Temporarily reset 'cursorbind', we don't want a side effect from moving
+  // the cursor away and back.
+  int p_crb_save = curwin->w_p_crb;
+  curwin->w_p_crb = false;
+
+  set_vim_var_nr(VV_LNUM, tabnr);
+  // Make a copy, because the label may include a function call that
+  // might change the option value and free the memory.
+  char *fmt = xstrdup(p_gtl);
+  // No width, so that the label is not truncated and %= does not fill.
+  build_stl_str_hl(curwin, buf, fmt, kOptGuitablabel, 0, schar_from_ascii(' '), 0,
+                   hltab, NULL, NULL, NULL);
+  xfree(fmt);
+
+  curwin->w_p_crb = p_crb_save;
+
+  if (tp != save_curtab) {
+    unuse_tabpage(tp);
+    use_tabpage(save_curtab);
+    curbuf = curwin->w_buffer;
+  }
+}
+
+/// Like transstr_buf(), but keeps NL so that a label can span several lines.
+static size_t trans_label(const char *s, ssize_t slen, char *buf, size_t buflen)
+{
+  const char *end = slen < 0 ? s + strlen(s) : s + slen;
+  size_t len = 0;
+  while (s < end && len + 1 < buflen) {
+    const char *nl = memchr(s, NL, (size_t)(end - s));
+    const char *seg_end = nl != NULL ? nl : end;
+    len += transstr_buf(s, seg_end - s, buf + len, buflen - len, true);
+    if (nl == NULL || len + 1 >= buflen) {
+      break;
+    }
+    buf[len++] = NL;
+    buf[len] = NUL;
+    s = nl + 1;
+  }
+  return len;
+}
+
+/// Splits the label "buf" into `[attr_id, text, hl_id]` chunks at the
+/// highlight records "hltab".  "attr" and "group" are the base highlight.
+static Array tabpage_label_chunks(Arena *arena, char *buf, stl_hlrec_t *hltab, int attr, int group)
+{
+  size_t n_chunks = 1;
+  for (stl_hlrec_t *sp = hltab; sp->start != NULL; sp++) {
+    n_chunks++;
+  }
+  Array chunks = arena_array(arena, n_chunks);
+
+  char transbuf[MAXPATHL];
+  char *end = buf + strlen(buf);
+  char *p = buf;
+  int curattr = attr;
+  int curgroup = group;
+  for (stl_hlrec_t *sp = hltab;; sp++) {
+    char *chunk_end = sp->start != NULL ? sp->start : end;
+    if (chunk_end > p) {
+      size_t tsize = trans_label(p, chunk_end - p, transbuf, sizeof transbuf);
+      Array chunk = arena_array(arena, 3);
+      ADD_C(chunk, INTEGER_OBJ(curattr));
+      ADD_C(chunk, CBUF_TO_ARENA_OBJ(arena, transbuf, tsize));
+      ADD_C(chunk, INTEGER_OBJ(curgroup));
+      ADD_C(chunks, ARRAY_OBJ(chunk));
+    }
+    if (sp->start == NULL) {
+      break;
+    }
+    p = sp->start;
+    stl_hlrec_attr(sp, NULL, attr, group, &curattr, &curgroup);
+  }
+  return chunks;
+}
+
 static void ui_ext_tabline_update(void)
 {
   Arena arena = ARENA_EMPTY;
@@ -542,14 +647,32 @@ static void ui_ext_tabline_update(void)
     n_tabs++;
   }
 
+  char label[MAXPATHL];
+  char transbuf[MAXPATHL];
+  int tabnr = 0;
   Array tabs = arena_array(&arena, n_tabs);
   FOR_ALL_TABS(tp) {
-    Dict tab_info = arena_dict(&arena, 2);
+    tabnr++;
+    Dict tab_info = arena_dict(&arena, 3);
     PUT_C(tab_info, "tab", TABPAGE_OBJ(tp->handle));
 
     win_T *cwp = (tp == curtab) ? curwin : tp->tp_curwin;
-    get_trans_bufname(cwp->w_buffer);
-    PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
+    stl_hlrec_t *hltab = NULL;
+    label[0] = NUL;
+    if (*p_gtl != NUL) {
+      eval_tabpage_label(tp, tabnr, (CharBuf){ label, sizeof(label) }, &hltab);
+    }
+    if (*label != NUL) {
+      hlf_T group = tp == curtab ? HLF_TPS : HLF_TP;
+      int attr = hl_combine_attr(HL_ATTR(HLF_TPF), win_hl_attr(cwp, (int)group));
+      size_t tsize = trans_label(label, -1, transbuf, sizeof transbuf);
+      PUT_C(tab_info, "name", CBUF_TO_ARENA_OBJ(&arena, transbuf, tsize));
+      PUT_C(tab_info, "name_chunks",
+            ARRAY_OBJ(tabpage_label_chunks(&arena, label, hltab, attr, (int)group)));
+    } else {
+      get_trans_bufname(cwp->w_buffer);
+      PUT_C(tab_info, "name", CSTR_TO_ARENA_OBJ(&arena, NameBuff));
+    }
 
     ADD_C(tabs, DICT_OBJ(tab_info));
   }
@@ -1694,7 +1817,8 @@ int build_stl_str_hl(win_T *wp, CharBuf out, char *fmt, OptIndex opt_idx, int op
       }
       break;
     case STL_PAGENUM:
-      num = 0;
+      // The tabpage number, which 'guitablabel' is evaluated with in v:lnum.
+      num = opt_idx == kOptGuitablabel ? (int)get_vim_var_nr(VV_LNUM) : 0;
       break;
 
     case STL_BUFNO:

@@ -435,6 +435,9 @@ Options:
                 "vertleft", "vertright", "verthoriz"
 - 'foldcolumn'  supports up to 9 dynamic/fixed columns
 - 'guicursor'   works in the terminal (TUI)
+- 'guitablabel' sets the per-tab label of UIs that draw their own tabpages
+                line (|ui-tabline|), supports highlights, may span several
+                lines, and ignores the `%@` item
 - 'inccommand'  shows interactive results for |:substitute|-like commands
                 and |:command-preview| commands
 - 'isident'     does not affect environment variable name parsing. |expr-env|
@@ -742,7 +745,6 @@ These legacy Vim features are not yet implemented:
 - *'browsedir'* *'bsdir'*
 - *'completepopup'*
 - *'guioptions'* *'go'*
-- *'guitablabel'* *'gtl'*
 - *'guitabtooltip'* *'gtt'*
 - *'mouseshape'* *'mouses'*
 

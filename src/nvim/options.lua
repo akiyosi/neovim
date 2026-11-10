@@ -4437,27 +4437,27 @@ local options = {
       abbreviation = 'gtl',
       defaults = '',
       desc = [=[
-        When non-empty describes the text to use in a label of the GUI
-        tabpages line.  When empty and when the result is empty Vim will use
-        a default label.  See |setting-guitablabel| for more info.
+        When non-empty describes the text to use in a label of the tabpages
+        line.  When empty and when the result is empty Nvim will use a default
+        label.  See |setting-guitablabel| for more info.
 
         The format of this option is like that of 'statusline'.
-        'guitabtooltip' is used for the tooltip, see below.
         The expression will be evaluated in the |sandbox| when set from a
         modeline, see |sandbox-option|.
         This option cannot be set in a modeline when 'modelineexpr' is off.
 
-        Only used when the GUI tabpages line is displayed.  'e' must be
-        present in 'guioptions'.  For the non-GUI tabpages line 'tabline' is
-        used.
+        Only used by a UI that draws its own tabpages line (|ui-tabline|),
+        which receives the label in the `tabline_update` event.  For the
+        tabpages line drawn by Nvim itself 'tabline' is used.
       ]=],
       full_name = 'guitablabel',
       modelineexpr = true,
-      redraw = { 'current_window' },
+      redraw = { 'tabline' },
       scope = { 'global' },
       short_desc = N_('GUI: custom label for a tabpage'),
       type = 'string',
-      immutable = true,
+      validation_cb = 'validate_statustabline_rulerformat',
+      varname = 'p_gtl',
     },
     {
       abbreviation = 'gtt',
@@ -9309,6 +9309,7 @@ local options = {
         ( -   Start of item group.  Can be used for setting the width and
               alignment of a section.  Must be followed by %) somewhere.
         ) -   End of item group.  No width fields allowed.
+        N N   For 'guitablabel': number of the tabpage.
         T N   For 'tabline': start of tabpage N label.  Use %T or %X to end
               the label.  Clicking this label with left mouse button switches
               to the specified tabpage, while clicking it with middle mouse

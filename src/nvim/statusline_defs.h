@@ -36,7 +36,7 @@ typedef enum {
   STL_PERCENTAGE      = 'p',  ///< Percentage through file.
   STL_ALTPERCENT      = 'P',  ///< Percentage as TOP BOT ALL or NN%.
   STL_ARGLISTSTAT     = 'a',  ///< Argument list status as (x of y).
-  STL_PAGENUM         = 'N',  ///< Page number (when printing).
+  STL_PAGENUM         = 'N',  ///< Tabpage number (in 'guitablabel').
   STL_SHOWCMD         = 'S',  ///< 'showcmd' buffer
   STL_FOLDCOL         = 'C',  ///< Fold column for 'statuscolumn'
   STL_SIGNCOL         = 's',  ///< Sign column for 'statuscolumn'
